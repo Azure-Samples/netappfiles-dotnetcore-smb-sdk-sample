@@ -7,7 +7,6 @@ namespace Microsoft.Azure.Management.ANF.Samples
 {
     using System;
     using System.Collections.Generic;
-    using System.Text.Json;
     using System.Threading.Tasks;
     using Microsoft.Azure.Management.ANF.Samples.Common;
     using Microsoft.Azure.Management.NetApp;
@@ -41,24 +40,25 @@ namespace Microsoft.Azure.Management.ANF.Samples
             //---------------------------------------------------------------------------------------------------------------------
             // Setting variables necessary for resources creation - change these to appropriated values related to your environment
             //---------------------------------------------------------------------------------------------------------------------
-            bool cleanup = false;
+
             string subscriptionId = "[Subscription Id]";
             string location = "[Location]";
-            string resourceGroupName = "[Resource group name where ANF resources will be created]";
-            string vnetName = "[Existing Vnet Name]";
-            string subnetName = "[Existing Subnet where ANF volumes will be created]";
-            string vnetResourceGroupName = "[Vnet Resource Group Name]";
-            string anfAccountName = "[ANF Account Name]";
-            string capacityPoolName = "[ANF Capacity Pool Name]";
+            string resourceGroupName = "[Resource group name]";
+            string subnetId = "[Existing subnet ID]";
+            string anfAccountName = "netapptestaccount";
+            string capacityPoolName = "testpool01";
             string capacityPoolServiceLevel = "Standard"; // Valid service levels are: Standard, Premium and Ultra
             long capacitypoolSize = 4398046511104;  // 4TiB which is minimum size
+            string volumeName = "testvol01";
             long volumeSize = 107374182400;  // 100GiB - volume minimum size
-
-            // SMB/CIFS related variables
+            
+            //// SMB/CIFS related variables
             string domainJoinUsername = "[Domain user with permissions to create computer accounts]";
             string dnsList = "[DNS Ip Address]"; // Please notice that this is a comma-separated string
             string adFQDN = "[Active Directory FQDN]";
             string smbServerNamePrefix = "[SMB Server Name Prefix]"; // this needs to be maximum 10 characters in length and during the domain join process a random string gets appended.
+
+            bool cleanup = false;
 
             //------------------------------------------------------------------------------------------------------
             // Getting Active Directory Identity's password (from identity that has rights to domain join computers) 
@@ -116,6 +116,7 @@ namespace Microsoft.Azure.Management.ANF.Samples
                 // Requesting account to be created
                 WriteConsoleMessage("Creating account...");
                 anfAccount = await anfClient.Accounts.CreateOrUpdateAsync(anfAccountBody, resourceGroupName, anfAccountName);
+                await WaitForAnfResource<NetAppAccount>(anfClient, anfAccount.Id);
             }
             else
             {
@@ -140,6 +141,7 @@ namespace Microsoft.Azure.Management.ANF.Samples
                 // Creating capacity pool
                 WriteConsoleMessage("Creating capacity pool...");
                 capacityPool = await anfClient.Pools.CreateOrUpdateAsync(capacityPoolBody, resourceGroupName, anfAccount.Name, capacityPoolName);
+                await WaitForAnfResource<CapacityPool>(anfClient, capacityPool.Id);
             }
             else
             {
@@ -150,13 +152,10 @@ namespace Microsoft.Azure.Management.ANF.Samples
             //------------------------
             // Creating SMB Volume
             //------------------------
-            string volumeName = $"Vol-{anfAccountName}-{capacityPoolName}";
 
             Volume volume = await GetResourceAsync<Volume>(anfClient, resourceGroupName, anfAccountName, ResourceUriUtils.GetAnfCapacityPool(capacityPool.Id), volumeName);
             if (volume == null)
             {
-                string subnetId = $"/subscriptions/{subscriptionId}/resourceGroups/{vnetResourceGroupName}/providers/Microsoft.Network/virtualNetworks/{vnetName}/subnets/{subnetName}";
-
                 // Creating volume body object
                 Volume volumeBody = new Volume()
                 {
@@ -172,6 +171,7 @@ namespace Microsoft.Azure.Management.ANF.Samples
                 // Please notice that the SMB Server gets created at this point by using information stored in ANF Account resource about Active Directory
                 WriteConsoleMessage("Creating volume...");
                 volume = await anfClient.Volumes.CreateOrUpdateAsync(volumeBody, resourceGroupName, anfAccount.Name, ResourceUriUtils.GetAnfCapacityPool(capacityPool.Id), volumeName);
+                await WaitForAnfResource<Volume>(anfClient, volume.Id);
             }
             else
             {
